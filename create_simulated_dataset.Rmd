@@ -1,0 +1,93 @@
+---
+title: Create simulated example dataset
+author: Marije Sluiskes
+output: rmarkdown::github_document
+---
+
+Simulate dataset for example analysis using penalized survRRR function. 
+
+# Define parameters
+
+```{r}
+set.seed(18)
+
+p <- 10 # number of predictors
+r <- 2 # number of ranks
+k <- 6 # number of outcomes
+n <- 1000 # number of rows
+```
+
+# Create true Beta matrix
+
+Alpha and Gamma matrix elements are drawn from a uniform[0,1] distribution.
+```{r}
+# Alpha matrix
+A_matrix <- matrix(NA, nrow = p, ncol = r)
+for (i in 1:r) {
+  A_matrix [, i] <- runif(p, 0,1)
+}
+
+# Gamma matrix
+Gamma_matrix <- matrix(NA, nrow = k, ncol = r)
+for (i in 1:r) {
+  Gamma_matrix [, i] <- runif(k, 0,1)
+}
+
+# Beta matrix
+Beta_matrix = A_matrix %*% t(Gamma_matrix)
+Beta_matrix
+```
+
+
+# Create dataset 
+
+```{r}
+# Make covariate matrix X (i.i.d., normally distributed)
+X <- matrix(NA, nrow = n, ncol = p)
+for (i in 1:p) {
+  X[, i] <- rnorm(n, mean = 0, sd = 1)
+}
+
+# Generate the failure times T (exponentially distributed)
+# Linear predictors
+eta <- X %*% Beta_matrix
+# Outcome times T from exp distribution
+T <- matrix(NA, nrow = n, ncol = k)
+for (i in 1:k) {
+   T[, i] <- rexp(n, rate =  exp(eta)[,i])
+}
+
+# Generate censoring time C
+#Random censoring time from uniform distribution
+C <- runif(n, min = 0, max = 1)
+
+# Determine the observed time and create censoring indicator
+T_obs <- pmin(T, C)
+delta <- as.integer(T <= C)  # 1 if the event occurred, 0 if censored
+# Check the proportion of events
+prop_event <- sum(delta == 1)/n/k
+prop_event
+
+# Create matrix with observed times and status indicators 
+observed_times = T_obs
+event = matrix(delta,n,k)
+
+# Make matrix into dataframe, add proper column names
+data <- data.frame(id = 1:n)
+for (i in 1:k) {
+  data[[paste0("t", i)]] <- observed_times[, i]
+  data[[paste0("d", i)]] <- event[, i]
+}
+# Add predictors 
+for (i in 1:p) {
+  data[[paste0("x", i)]] <- X[, i]
+}
+```
+
+This results in a dataset with $n$ individuals, where each individual has a time and status indicator for the $k$ different events under consideration, and $p$ predictor variables The true coefficient matrix Beta is of rank $r$.
+
+```{r}
+simdat <- data 
+save(simdat, file = "simdat.RData")
+```
+
